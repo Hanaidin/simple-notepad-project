@@ -73,6 +73,10 @@ The application still supports:
 
 `SpellCheckerHighlighter` also contains the optional syntax highlighter. This keeps all document highlighting in one `QSyntaxHighlighter` subclass, which avoids conflicts between multiple highlighters on the same `QTextDocument`.
 
+`AutosaveManager` owns draft-file reading, writing, and cleanup so that recovery logic is not mixed directly with menu-building code. `SpellChecker` keeps both a `std::set` for exact lookup and a first-letter index for faster suggestions. The status bar caches the word count and recalculates it only when the document text changes, while cursor movement only refreshes line and column.
+
+Screenshots are intentionally not committed because the assignment warns against unrelated extra files. The demo checklist above documents the exact features to show during the live grading session.
+
 The project builds with:
 
 ```bash

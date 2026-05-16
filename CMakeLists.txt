@@ -12,6 +12,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets PrintSupport)
 
 set(NOTEPAD_SOURCES
     main.cpp
+    autosave_manager.cpp
     main_window.cpp
     text_edit.cpp
     spell_checker.cpp
@@ -30,6 +31,7 @@ enable_testing()
 
 add_executable(notepad_core_tests
     tests/notepad_core_tests.cpp
+    autosave_manager.cpp
     spell_checker.cpp
 )
 

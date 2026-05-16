@@ -1,6 +1,7 @@
 #ifndef SPELL_CHECKER_H
 #define SPELL_CHECKER_H
 
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -19,6 +20,7 @@ private:
     static int edit_distance_limited(const std::string& left, const std::string& right, int limit);
 
     std::set<std::string> words;
+    std::map<char, std::vector<std::string>> wordsByFirstLetter;
 };
 
 #endif

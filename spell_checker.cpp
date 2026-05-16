@@ -14,12 +14,15 @@ void SpellChecker::load_words(const std::string& path)
         throw file_read_exception(path);
 
     words.clear();
+    wordsByFirstLetter.clear();
 
     std::string word;
     while (std::getline(input, word)) {
         word = normalize_word(word);
-        if (!word.empty())
+        if (!word.empty()) {
             words.insert(word);
+            wordsByFirstLetter[word.front()].push_back(word);
+        }
     }
 }
 
@@ -48,14 +51,14 @@ std::vector<std::string> SpellChecker::suggestions(const std::string& word, int 
 
     std::vector<Candidate> candidates;
 
-    for (const std::string& dictionaryWord : words) {
+    auto bucket = wordsByFirstLetter.find(normalized.front());
+    if (bucket == wordsByFirstLetter.end())
+        return {};
+
+    for (const std::string& dictionaryWord : bucket->second) {
         int lengthDifference
             = std::abs(static_cast<int>(dictionaryWord.size() - normalized.size()));
         if (lengthDifference > 2)
-            continue;
-
-        if (!normalized.empty() && !dictionaryWord.empty()
-            && normalized.front() != dictionaryWord.front() && normalized.size() > 3)
             continue;
 
         int distance = edit_distance_limited(normalized, dictionaryWord, 2);

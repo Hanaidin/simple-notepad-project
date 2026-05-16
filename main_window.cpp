@@ -7,7 +7,6 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QColorDialog>
-#include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -21,7 +20,6 @@
 #include <QPrinter>
 #include <QRegularExpression>
 #include <QSettings>
-#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTextBlock>
 #include <QTextStream>
@@ -39,21 +37,14 @@ const int maximumRecentFiles = 5;
 QString recent_files_key() { return "recentFiles"; }
 
 QString icon_path(const QString& fileName) { return QString("data/images/%1").arg(fileName); }
-
-QString autosave_file_path()
-{
-    QString directoryPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(directoryPath);
-    return directoryPath + "/autosave.html";
-}
 }
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , editor(new TextEdit(this))
     , spellHighlighter(nullptr)
-    , autosavePath(autosave_file_path())
     , zoomSteps(0)
+    , cachedWordCount(0)
     , fileMenu(nullptr)
     , editMenu(nullptr)
     , formatMenu(nullptr)
@@ -204,15 +195,15 @@ void MainWindow::restore_autosave_draft()
     if (!ask_to_save_if_modified())
         return;
 
-    QFile file(autosavePath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    bool ok = false;
+    QString html = autosaveManager.read_html(&ok);
+    if (!ok) {
         autosaveLabel->setText("Autosave: unavailable");
         restoreAutosaveAction->setEnabled(false);
         return;
     }
 
-    QTextStream stream(&file);
-    editor->setHtml(stream.readAll());
+    editor->setHtml(html);
     currentFilePath.clear();
     editor->document()->setModified(true);
     restoreAutosaveAction->setEnabled(false);
@@ -390,14 +381,11 @@ void MainWindow::autosave_draft()
         return;
     }
 
-    QFile file(autosavePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    if (!autosaveManager.write_html(editor->toHtml())) {
         autosaveLabel->setText("Autosave: failed");
         return;
     }
 
-    QTextStream stream(&file);
-    stream << editor->toHtml();
     autosaveLabel->setText("Autosave: saved");
 }
 
@@ -445,14 +433,13 @@ void MainWindow::show_editor_context_menu(const QPoint& position)
 
 void MainWindow::update_status_bar()
 {
-    int words = count_words();
     int lines = qMax(1, editor->document()->blockCount());
 
     QTextCursor cursor = editor->textCursor();
     int line = cursor.blockNumber() + 1;
     int column = cursor.positionInBlock() + 1;
 
-    wordLineLabel->setText(QString("Words: %1   Lines: %2").arg(words).arg(lines));
+    wordLineLabel->setText(QString("Words: %1   Lines: %2").arg(cachedWordCount).arg(lines));
     cursorLabel->setText(QString("Ln %1, Col %2").arg(line).arg(column));
     zoomLabel->setText(QString("Zoom: %1%").arg(100 + zoomSteps * 10));
 }
@@ -617,7 +604,7 @@ void MainWindow::connect_editor_signals()
 {
     connect(
         editor->document(), &QTextDocument::modificationChanged, saveAction, &QAction::setEnabled);
-    connect(editor, &QTextEdit::textChanged, this, &MainWindow::update_status_bar);
+    connect(editor, &QTextEdit::textChanged, this, &MainWindow::handle_text_changed);
     connect(editor, &QTextEdit::cursorPositionChanged, this, &MainWindow::update_status_bar);
 
     editor->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -637,8 +624,7 @@ void MainWindow::setup_autosave()
 
 void MainWindow::try_restore_autosave()
 {
-    QFile file(autosavePath);
-    if (!file.exists() || file.size() == 0)
+    if (!autosaveManager.has_draft())
         return;
 
     restoreAutosaveAction->setEnabled(true);
@@ -763,7 +749,7 @@ void MainWindow::update_recent_files_menu()
 
 void MainWindow::clear_autosave()
 {
-    QFile::remove(autosavePath);
+    autosaveManager.clear();
     if (restoreAutosaveAction != nullptr)
         restoreAutosaveAction->setEnabled(false);
     if (autosaveLabel != nullptr)
@@ -832,7 +818,13 @@ void MainWindow::apply_transform(QString (*transform)(QString))
     editor->setTextCursor(cursor);
 }
 
-int MainWindow::count_words() const
+void MainWindow::handle_text_changed()
+{
+    cachedWordCount = calculate_word_count();
+    update_status_bar();
+}
+
+int MainWindow::calculate_word_count() const
 {
     int words = 0;
     static const QRegularExpression wordExpression("[A-Za-z]+");

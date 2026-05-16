@@ -1,3 +1,4 @@
+#include "autosave_manager.h"
 #include "notepad_exception.h"
 #include "spell_checker.h"
 #include "text_transform.h"
@@ -20,6 +21,7 @@ int main()
 
     QTemporaryDir directory;
     std::string dictionaryPath = (directory.path() + "/words.txt").toStdString();
+    QString autosavePath = directory.path() + "/autosave.html";
 
     std::ofstream dictionary(dictionaryPath);
     dictionary << "hello\nworld\nproject\nnotepad\nspelling\n";
@@ -45,6 +47,16 @@ int main()
         missingDictionaryThrows = true;
     }
     assert(missingDictionaryThrows);
+
+    AutosaveManager autosave(autosavePath);
+    assert(!autosave.has_draft());
+    assert(autosave.write_html("<p>draft</p>"));
+    assert(autosave.has_draft());
+    bool readOk = false;
+    assert(autosave.read_html(&readOk).contains("draft"));
+    assert(readOk);
+    autosave.clear();
+    assert(!autosave.has_draft());
 
     return 0;
 }

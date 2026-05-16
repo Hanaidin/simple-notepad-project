@@ -1,6 +1,7 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
+#include "autosave_manager.h"
 #include "find_replace_dialog.h"
 #include "spell_checker.h"
 #include "spell_checker_highlighter.h"
@@ -59,6 +60,7 @@ private slots:
     void autosave_draft();
     void check_spelling();
     void show_editor_context_menu(const QPoint& position);
+    void handle_text_changed();
     void update_status_bar();
     void open_recent_file();
 
@@ -83,18 +85,19 @@ private:
 
     void merge_format_on_selection(const QTextCharFormat& format);
     void apply_transform(QString (*transform)(QString));
-    int count_words() const;
+    int calculate_word_count() const;
     std::vector<std::pair<QString, int>> collect_word_frequency() const;
     QString preserve_case(const QString& original, const QString& suggestion) const;
 
     TextEdit* editor;
     SpellChecker spellChecker;
     SpellCheckerHighlighter* spellHighlighter;
+    AutosaveManager autosaveManager;
     QPointer<FindReplaceDialog> findReplaceDialog;
 
     QString currentFilePath;
-    QString autosavePath;
     int zoomSteps;
+    int cachedWordCount;
 
     QMenu* fileMenu;
     QMenu* editMenu;
