@@ -10,14 +10,27 @@ class SpellCheckerHighlighter : public QSyntaxHighlighter {
     Q_OBJECT
 
 public:
+    enum class SyntaxMode {
+        PlainText,
+        Cpp,
+        Python,
+    };
+
     SpellCheckerHighlighter(QTextDocument* parent, const SpellChecker* checker);
+    void set_syntax_mode(SyntaxMode mode);
 
 protected:
     void highlightBlock(const QString& text) override;
 
 private:
+    void highlight_keywords(const QString& text);
+    void highlight_spelling(const QString& text);
+
     const SpellChecker* checker;
+    SyntaxMode syntaxMode;
     QTextCharFormat misspelledFormat;
+    QTextCharFormat keywordFormat;
+    QTextCharFormat commentFormat;
 };
 
 #endif

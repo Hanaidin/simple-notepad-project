@@ -13,6 +13,7 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QPointer>
+#include <QTimer>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -29,7 +30,9 @@ private slots:
     void save_file();
     void save_file_as();
     void print_document();
+    void export_pdf();
     void update_title();
+    void restore_autosave_draft();
 
     void show_find_replace_dialog();
     void find_next();
@@ -52,6 +55,8 @@ private slots:
     void zoom_in();
     void zoom_out();
     void reset_zoom();
+    void toggle_dark_theme();
+    void autosave_draft();
     void check_spelling();
     void show_editor_context_menu(const QPoint& position);
     void update_status_bar();
@@ -64,6 +69,8 @@ private:
     void create_status_bar();
     void connect_editor_signals();
     void load_spell_checker();
+    void setup_autosave();
+    void try_restore_autosave();
 
     void load_file(const QString& path);
     void write_file(const QString& path);
@@ -71,9 +78,12 @@ private:
     void show_error(const QString& message);
     void add_recent_file(const QString& path);
     void update_recent_files_menu();
+    void clear_autosave();
+    void apply_theme(bool darkMode);
 
     void merge_format_on_selection(const QTextCharFormat& format);
     void apply_transform(QString (*transform)(QString));
+    int count_words() const;
     std::vector<std::pair<QString, int>> collect_word_frequency() const;
     QString preserve_case(const QString& original, const QString& suggestion) const;
 
@@ -83,6 +93,7 @@ private:
     QPointer<FindReplaceDialog> findReplaceDialog;
 
     QString currentFilePath;
+    QString autosavePath;
     int zoomSteps;
 
     QMenu* fileMenu;
@@ -96,11 +107,15 @@ private:
     QAction* boldAction;
     QAction* italicAction;
     QAction* underlineAction;
+    QAction* darkThemeAction;
+    QAction* restoreAutosaveAction;
     QAction* recentFileActions[5];
 
     QLabel* wordLineLabel;
     QLabel* cursorLabel;
     QLabel* zoomLabel;
+    QLabel* autosaveLabel;
+    QTimer* autosaveTimer;
 };
 
 #endif

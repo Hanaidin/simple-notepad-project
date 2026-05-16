@@ -7,6 +7,7 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QColorDialog>
+#include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -20,9 +21,11 @@
 #include <QPrinter>
 #include <QRegularExpression>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTextBlock>
 #include <QTextStream>
+#include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
 
@@ -36,12 +39,20 @@ const int maximumRecentFiles = 5;
 QString recent_files_key() { return "recentFiles"; }
 
 QString icon_path(const QString& fileName) { return QString("data/images/%1").arg(fileName); }
+
+QString autosave_file_path()
+{
+    QString directoryPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(directoryPath);
+    return directoryPath + "/autosave.html";
+}
 }
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , editor(new TextEdit(this))
     , spellHighlighter(nullptr)
+    , autosavePath(autosave_file_path())
     , zoomSteps(0)
     , fileMenu(nullptr)
     , editMenu(nullptr)
@@ -53,9 +64,13 @@ MainWindow::MainWindow(QWidget* parent)
     , boldAction(nullptr)
     , italicAction(nullptr)
     , underlineAction(nullptr)
+    , darkThemeAction(nullptr)
+    , restoreAutosaveAction(nullptr)
     , wordLineLabel(nullptr)
     , cursorLabel(nullptr)
     , zoomLabel(nullptr)
+    , autosaveLabel(nullptr)
+    , autosaveTimer(new QTimer(this))
 {
     setCentralWidget(editor);
     setWindowTitle("Notepad");
@@ -69,6 +84,11 @@ MainWindow::MainWindow(QWidget* parent)
     create_toolbar();
     create_status_bar();
     connect_editor_signals();
+    setup_autosave();
+
+    QSettings settings;
+    apply_theme(settings.value("darkTheme", false).toBool());
+    try_restore_autosave();
 
     update_recent_files_menu();
     update_status_bar();
@@ -90,6 +110,7 @@ void MainWindow::new_file()
     editor->clear();
     currentFilePath.clear();
     editor->document()->setModified(false);
+    clear_autosave();
     update_title();
 }
 
@@ -152,6 +173,23 @@ void MainWindow::print_document()
         editor->print(&printer);
 }
 
+void MainWindow::export_pdf()
+{
+    QString path = QFileDialog::getSaveFileName(this, "Export PDF", QString(), "PDF files (*.pdf)");
+
+    if (path.isEmpty())
+        return;
+
+    if (!path.endsWith(".pdf", Qt::CaseInsensitive))
+        path += ".pdf";
+
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setOutputFileName(path);
+    editor->document()->print(&printer);
+    statusBar()->showMessage("PDF exported.", 2500);
+}
+
 void MainWindow::update_title()
 {
     if (currentFilePath.isEmpty()) {
@@ -159,6 +197,27 @@ void MainWindow::update_title()
     } else {
         setWindowTitle(QString("Notepad: %1").arg(currentFilePath));
     }
+}
+
+void MainWindow::restore_autosave_draft()
+{
+    if (!ask_to_save_if_modified())
+        return;
+
+    QFile file(autosavePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        autosaveLabel->setText("Autosave: unavailable");
+        restoreAutosaveAction->setEnabled(false);
+        return;
+    }
+
+    QTextStream stream(&file);
+    editor->setHtml(stream.readAll());
+    currentFilePath.clear();
+    editor->document()->setModified(true);
+    restoreAutosaveAction->setEnabled(false);
+    autosaveLabel->setText("Autosave: restored");
+    update_title();
 }
 
 void MainWindow::show_find_replace_dialog()
@@ -316,6 +375,32 @@ void MainWindow::reset_zoom()
     update_status_bar();
 }
 
+void MainWindow::toggle_dark_theme()
+{
+    bool darkMode = darkThemeAction->isChecked();
+    QSettings settings;
+    settings.setValue("darkTheme", darkMode);
+    apply_theme(darkMode);
+}
+
+void MainWindow::autosave_draft()
+{
+    if (!editor->document()->isModified()) {
+        autosaveLabel->setText("Autosave: idle");
+        return;
+    }
+
+    QFile file(autosavePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        autosaveLabel->setText("Autosave: failed");
+        return;
+    }
+
+    QTextStream stream(&file);
+    stream << editor->toHtml();
+    autosaveLabel->setText("Autosave: saved");
+}
+
 void MainWindow::check_spelling()
 {
     spellHighlighter->rehighlight();
@@ -360,9 +445,7 @@ void MainWindow::show_editor_context_menu(const QPoint& position)
 
 void MainWindow::update_status_bar()
 {
-    std::vector<std::pair<QString, int>> frequencies = collect_word_frequency();
-    int words = std::accumulate(frequencies.begin(), frequencies.end(), 0,
-        [](int total, const std::pair<QString, int>& item) { return total + item.second; });
+    int words = count_words();
     int lines = qMax(1, editor->document()->blockCount());
 
     QTextCursor cursor = editor->textCursor();
@@ -416,6 +499,14 @@ void MainWindow::create_actions()
     underlineAction->setCheckable(true);
     underlineAction->setShortcut(QKeySequence::Underline);
     connect(underlineAction, &QAction::triggered, this, &MainWindow::apply_underline);
+
+    darkThemeAction = new QAction("Dark Theme", this);
+    darkThemeAction->setCheckable(true);
+    connect(darkThemeAction, &QAction::triggered, this, &MainWindow::toggle_dark_theme);
+
+    restoreAutosaveAction = new QAction("Restore Autosaved Draft", this);
+    restoreAutosaveAction->setEnabled(false);
+    connect(restoreAutosaveAction, &QAction::triggered, this, &MainWindow::restore_autosave_draft);
 }
 
 void MainWindow::create_menus()
@@ -427,6 +518,8 @@ void MainWindow::create_menus()
     fileMenu->addAction("Save &As...", QKeySequence::SaveAs, this, &MainWindow::save_file_as);
     fileMenu->addSeparator();
     fileMenu->addAction("&Print...", QKeySequence::Print, this, &MainWindow::print_document);
+    fileMenu->addAction("Export PDF...", this, &MainWindow::export_pdf);
+    fileMenu->addAction(restoreAutosaveAction);
     recentFilesMenu = fileMenu->addMenu("Recent Files");
     for (QAction* action : recentFileActions)
         recentFilesMenu->addAction(action);
@@ -463,11 +556,34 @@ void MainWindow::create_menus()
     toolsMenu = menuBar()->addMenu("&Tools");
     toolsMenu->addAction("Check Spelling...", this, &MainWindow::check_spelling);
     toolsMenu->addAction("Word Frequency", this, &MainWindow::show_word_frequency);
+    QMenu* syntaxMenu = toolsMenu->addMenu("Syntax Highlighting");
+    QActionGroup* syntaxGroup = new QActionGroup(this);
+    QAction* plainTextAction = syntaxMenu->addAction("Plain Text");
+    QAction* cppAction = syntaxMenu->addAction("C++");
+    QAction* pythonAction = syntaxMenu->addAction("Python");
+
+    for (QAction* action : { plainTextAction, cppAction, pythonAction }) {
+        action->setCheckable(true);
+        syntaxGroup->addAction(action);
+    }
+
+    plainTextAction->setChecked(true);
+
+    connect(plainTextAction, &QAction::triggered, this, [this]() {
+        spellHighlighter->set_syntax_mode(SpellCheckerHighlighter::SyntaxMode::PlainText);
+    });
+    connect(cppAction, &QAction::triggered, this,
+        [this]() { spellHighlighter->set_syntax_mode(SpellCheckerHighlighter::SyntaxMode::Cpp); });
+    connect(pythonAction, &QAction::triggered, this, [this]() {
+        spellHighlighter->set_syntax_mode(SpellCheckerHighlighter::SyntaxMode::Python);
+    });
 
     viewMenu = menuBar()->addMenu("&View");
     viewMenu->addAction("Zoom In", QKeySequence::ZoomIn, this, &MainWindow::zoom_in);
     viewMenu->addAction("Zoom Out", QKeySequence::ZoomOut, this, &MainWindow::zoom_out);
     viewMenu->addAction("Reset Zoom", QKeySequence("Ctrl+0"), this, &MainWindow::reset_zoom);
+    viewMenu->addSeparator();
+    viewMenu->addAction(darkThemeAction);
 }
 
 void MainWindow::create_toolbar()
@@ -489,7 +605,9 @@ void MainWindow::create_status_bar()
     wordLineLabel = new QLabel(this);
     cursorLabel = new QLabel(this);
     zoomLabel = new QLabel(this);
+    autosaveLabel = new QLabel(this);
 
+    statusBar()->addWidget(autosaveLabel);
     statusBar()->addPermanentWidget(wordLineLabel);
     statusBar()->addPermanentWidget(cursorLabel);
     statusBar()->addPermanentWidget(zoomLabel);
@@ -507,6 +625,25 @@ void MainWindow::connect_editor_signals()
         editor, &QWidget::customContextMenuRequested, this, &MainWindow::show_editor_context_menu);
 
     saveAction->setEnabled(false);
+}
+
+void MainWindow::setup_autosave()
+{
+    autosaveTimer->setInterval(5000);
+    connect(autosaveTimer, &QTimer::timeout, this, &MainWindow::autosave_draft);
+    autosaveTimer->start();
+    autosaveLabel->setText("Autosave: idle");
+}
+
+void MainWindow::try_restore_autosave()
+{
+    QFile file(autosavePath);
+    if (!file.exists() || file.size() == 0)
+        return;
+
+    restoreAutosaveAction->setEnabled(true);
+    autosaveLabel->setText("Autosave: draft available");
+    statusBar()->showMessage("Recovered draft available in File > Restore Autosaved Draft.", 7000);
 }
 
 void MainWindow::load_spell_checker()
@@ -540,6 +677,7 @@ void MainWindow::load_file(const QString& path)
     editor->document()->setModified(false);
     add_recent_file(path);
     update_title();
+    clear_autosave();
     spellHighlighter->rehighlight();
 }
 
@@ -558,6 +696,7 @@ void MainWindow::write_file(const QString& path)
         stream << editor->toPlainText();
 
     editor->document()->setModified(false);
+    clear_autosave();
 }
 
 bool MainWindow::ask_to_save_if_modified()
@@ -574,7 +713,12 @@ bool MainWindow::ask_to_save_if_modified()
         return !editor->document()->isModified();
     }
 
-    return answer == QMessageBox::Discard;
+    if (answer == QMessageBox::Discard) {
+        clear_autosave();
+        return true;
+    }
+
+    return false;
 }
 
 void MainWindow::show_error(const QString& message)
@@ -617,6 +761,49 @@ void MainWindow::update_recent_files_menu()
     recentFilesMenu->setEnabled(count > 0);
 }
 
+void MainWindow::clear_autosave()
+{
+    QFile::remove(autosavePath);
+    if (restoreAutosaveAction != nullptr)
+        restoreAutosaveAction->setEnabled(false);
+    if (autosaveLabel != nullptr)
+        autosaveLabel->setText("Autosave: idle");
+}
+
+void MainWindow::apply_theme(bool darkMode)
+{
+    darkThemeAction->setChecked(darkMode);
+
+    if (!darkMode) {
+        qApp->setStyleSheet("");
+        return;
+    }
+
+    qApp->setStyleSheet(R"(
+        QMainWindow, QMenuBar, QMenu, QStatusBar, QToolBar {
+            background: #202124;
+            color: #f1f3f4;
+        }
+        QTextEdit {
+            background: #17181b;
+            color: #f8f9fa;
+            selection-background-color: #3b82f6;
+            selection-color: white;
+        }
+        QMenu::item:selected {
+            background: #3b82f6;
+        }
+        QDialog, QLabel, QTableWidget, QLineEdit, QPushButton {
+            background: #202124;
+            color: #f1f3f4;
+        }
+        QHeaderView::section {
+            background: #2f3136;
+            color: #f1f3f4;
+        }
+    )");
+}
+
 void MainWindow::merge_format_on_selection(const QTextCharFormat& format)
 {
     QTextCursor cursor = editor->textCursor();
@@ -643,6 +830,20 @@ void MainWindow::apply_transform(QString (*transform)(QString))
         cursor.clearSelection();
 
     editor->setTextCursor(cursor);
+}
+
+int MainWindow::count_words() const
+{
+    int words = 0;
+    static const QRegularExpression wordExpression("[A-Za-z]+");
+    QRegularExpressionMatchIterator iterator = wordExpression.globalMatch(editor->toPlainText());
+
+    while (iterator.hasNext()) {
+        iterator.next();
+        ++words;
+    }
+
+    return words;
 }
 
 std::vector<std::pair<QString, int>> MainWindow::collect_word_frequency() const

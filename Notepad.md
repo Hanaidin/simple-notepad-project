@@ -33,7 +33,27 @@ The spell checker is implemented in `spell_checker.h`, `spell_checker.cpp`, `spe
 4. Print: `File > Print...` opens `QPrintDialog` and prints through `QTextEdit::print()`.
 5. Recent files: `File > Recent Files` keeps the last five files using `QSettings`.
 6. Line numbers: `TextEdit` displays a line-number margin beside the editor.
-7. Zoom: `View > Zoom In`, `Zoom Out`, and `Reset Zoom` support standard shortcuts.
+7. Syntax highlighting: `Tools > Syntax Highlighting` supports Plain Text, C++, and Python keyword highlighting.
+8. Zoom: `View > Zoom In`, `Zoom Out`, and `Reset Zoom` support standard shortcuts.
+
+## Extra Bonus Features
+
+- PDF export: `File > Export PDF...` saves the current document as a PDF.
+- Dark theme: `View > Dark Theme` switches the editor into a persistent dark mode.
+- Autosave and recovery: unsaved work is periodically saved to an application data draft. If a draft exists, `File > Restore Autosaved Draft` becomes available without blocking the main window.
+
+## Demo Checklist
+
+During the demo, the strongest flow is:
+
+1. Type a misspelled word such as `wurld` and show the red underline.
+2. Right-click the misspelled word and choose a suggestion.
+3. Open `Tools > Syntax Highlighting > C++` or `Python` and type a short code snippet to show keyword highlighting.
+4. Use `Format > Font...`, `Format > Text Color...`, bold, italic, and underline on selected text.
+5. Open `Edit > Find / Replace...` and replace a word.
+6. Open `Tools > Word Frequency` to show the frequency dialog.
+7. Use `View > Dark Theme`, zoom controls, and the line/column status bar.
+8. Use `File > Export PDF...` or `File > Print...` to show output features.
 
 ## Existing Features Preserved
 
@@ -50,6 +70,8 @@ The application still supports:
 ## Design Notes
 
 `MainWindow` owns the main GUI and coordinates actions. Spell checking is separated into `SpellChecker` for dictionary logic and `SpellCheckerHighlighter` for editor highlighting. `TextEdit` subclasses `QTextEdit` only for line-number painting, so rich text editing still works normally.
+
+`SpellCheckerHighlighter` also contains the optional syntax highlighter. This keeps all document highlighting in one `QSyntaxHighlighter` subclass, which avoids conflicts between multiple highlighters on the same `QTextDocument`.
 
 The project builds with:
 

@@ -38,8 +38,12 @@ int TextEdit::line_number_area_width() const
 void TextEdit::line_number_area_paint_event(QPaintEvent* event)
 {
     QPainter painter(lineNumberArea);
-    painter.fillRect(event->rect(), QColor(245, 247, 250));
-    painter.setPen(QColor(108, 117, 125));
+    bool darkPalette = palette().color(QPalette::Base).lightness() < 128;
+    QColor background = darkPalette ? QColor(37, 39, 43) : QColor(245, 247, 250);
+    QColor foreground = darkPalette ? QColor(189, 193, 198) : QColor(108, 117, 125);
+
+    painter.fillRect(event->rect(), background);
+    painter.setPen(foreground);
 
     QTextBlock block = document()->begin();
     int blockNumber = 1;
