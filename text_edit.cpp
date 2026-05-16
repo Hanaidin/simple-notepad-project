@@ -1,6 +1,7 @@
 #include "text_edit.h"
 
 #include <QAbstractTextDocumentLayout>
+#include <QFontDatabase>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QScrollBar>
@@ -12,6 +13,10 @@ TextEdit::TextEdit(QWidget* parent)
 {
     setAcceptRichText(true);
     setLineWrapMode(QTextEdit::WidgetWidth);
+    setFrameShape(QFrame::NoFrame);
+    setPlaceholderText("Start writing...");
+    setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    document()->setDocumentMargin(16);
     setViewportMargins(line_number_area_width(), 0, 0, 0);
 
     connect(document(), &QTextDocument::blockCountChanged, this,

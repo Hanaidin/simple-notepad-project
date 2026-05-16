@@ -25,6 +25,7 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -66,6 +67,7 @@ MainWindow::MainWindow(QWidget* parent)
     setCentralWidget(editor);
     setWindowTitle("Notepad");
     resize(980, 680);
+    setUnifiedTitleAndToolBarOnMac(true);
 
     load_spell_checker();
     spellHighlighter = new SpellCheckerHighlighter(editor->document(), &spellChecker);
@@ -576,7 +578,10 @@ void MainWindow::create_menus()
 void MainWindow::create_toolbar()
 {
     QToolBar* toolbar = addToolBar("Format");
+    toolbar->setObjectName("formatToolbar");
     toolbar->setMovable(false);
+    toolbar->setIconSize(QSize(22, 22));
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     toolbar->addAction(boldAction);
     toolbar->addAction(italicAction);
     toolbar->addAction(underlineAction);
@@ -761,31 +766,180 @@ void MainWindow::apply_theme(bool darkMode)
     darkThemeAction->setChecked(darkMode);
 
     if (!darkMode) {
-        qApp->setStyleSheet("");
+        qApp->setStyleSheet(R"(
+            QMainWindow {
+                background: #f6f7f9;
+            }
+            QToolBar#formatToolbar {
+                background: #ffffff;
+                border: 0;
+                border-bottom: 1px solid #dde1e7;
+                spacing: 6px;
+                padding: 10px 12px;
+            }
+            QToolBar#formatToolbar QToolButton {
+                background: transparent;
+                color: #24292f;
+                border: 1px solid transparent;
+                border-radius: 7px;
+                padding: 7px 10px;
+                font-weight: 600;
+            }
+            QToolBar#formatToolbar QToolButton:hover {
+                background: #eef2f7;
+                border-color: #d7dde5;
+            }
+            QToolBar#formatToolbar QToolButton:checked {
+                background: #dbeafe;
+                border-color: #93c5fd;
+                color: #1d4ed8;
+            }
+            QToolBar::separator {
+                background: #d8dee6;
+                width: 1px;
+                margin: 4px 8px;
+            }
+            QTextEdit {
+                background: #ffffff;
+                color: #1f2328;
+                selection-background-color: #2563eb;
+                selection-color: #ffffff;
+                border: 0;
+                font-size: 15px;
+            }
+            QStatusBar {
+                background: #ffffff;
+                color: #57606a;
+                border-top: 1px solid #dde1e7;
+                padding: 4px 10px;
+            }
+            QStatusBar QLabel {
+                color: #57606a;
+                padding: 0 6px;
+            }
+            QMenu {
+                background: #ffffff;
+                color: #24292f;
+                border: 1px solid #d0d7de;
+                padding: 6px;
+            }
+            QMenu::item {
+                border-radius: 6px;
+                padding: 6px 22px;
+            }
+            QMenu::item:selected {
+                background: #eef2ff;
+                color: #1d4ed8;
+            }
+            QDialog, QTableWidget, QLineEdit {
+                background: #ffffff;
+                color: #24292f;
+            }
+            QPushButton {
+                background: #f6f8fa;
+                color: #24292f;
+                border: 1px solid #d0d7de;
+                border-radius: 7px;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background: #eef2f7;
+            }
+            QHeaderView::section {
+                background: #f6f8fa;
+                color: #57606a;
+                border: 0;
+                border-bottom: 1px solid #d0d7de;
+                padding: 6px;
+            }
+        )");
         return;
     }
 
     qApp->setStyleSheet(R"(
-        QMainWindow, QMenuBar, QMenu, QStatusBar, QToolBar {
-            background: #202124;
+        QMainWindow {
+            background: #111315;
+        }
+        QToolBar#formatToolbar {
+            background: #25282c;
             color: #f1f3f4;
+            border: 0;
+            border-bottom: 1px solid #3a3f45;
+            spacing: 6px;
+            padding: 10px 12px;
+        }
+        QToolBar#formatToolbar QToolButton {
+            background: transparent;
+            color: #e8eaed;
+            border: 1px solid transparent;
+            border-radius: 7px;
+            padding: 7px 10px;
+            font-weight: 600;
+        }
+        QToolBar#formatToolbar QToolButton:hover {
+            background: #33373d;
+            border-color: #4a5058;
+        }
+        QToolBar#formatToolbar QToolButton:checked {
+            background: #1e3a5f;
+            border-color: #3b82f6;
+            color: #dbeafe;
+        }
+        QToolBar::separator {
+            background: #3a3f45;
+            width: 1px;
+            margin: 4px 8px;
         }
         QTextEdit {
-            background: #17181b;
+            background: #181a1d;
             color: #f8f9fa;
             selection-background-color: #3b82f6;
-            selection-color: white;
+            selection-color: #ffffff;
+            border: 0;
+            font-size: 15px;
+        }
+        QStatusBar {
+            background: #25282c;
+            color: #c9d1d9;
+            border-top: 1px solid #3a3f45;
+            padding: 4px 10px;
+        }
+        QStatusBar QLabel {
+            color: #c9d1d9;
+            padding: 0 6px;
+        }
+        QMenu {
+            background: #25282c;
+            color: #f1f3f4;
+            border: 1px solid #3a3f45;
+            padding: 6px;
+        }
+        QMenu::item {
+            border-radius: 6px;
+            padding: 6px 22px;
         }
         QMenu::item:selected {
             background: #3b82f6;
+            color: #ffffff;
         }
         QDialog, QLabel, QTableWidget, QLineEdit, QPushButton {
-            background: #202124;
+            background: #25282c;
             color: #f1f3f4;
         }
+        QPushButton {
+            border: 1px solid #4a5058;
+            border-radius: 7px;
+            padding: 6px 12px;
+        }
+        QPushButton:hover {
+            background: #33373d;
+        }
         QHeaderView::section {
-            background: #2f3136;
+            background: #33373d;
             color: #f1f3f4;
+            border: 0;
+            border-bottom: 1px solid #4a5058;
+            padding: 6px;
         }
     )");
 }
