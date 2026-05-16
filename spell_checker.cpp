@@ -15,6 +15,7 @@ void SpellChecker::load_words(const std::string& path)
 
     words.clear();
     wordsByFirstLetter.clear();
+    wordsByLength.clear();
 
     std::string word;
     while (std::getline(input, word)) {
@@ -22,6 +23,7 @@ void SpellChecker::load_words(const std::string& path)
         if (!word.empty()) {
             words.insert(word);
             wordsByFirstLetter[word.front()].push_back(word);
+            wordsByLength[static_cast<int>(word.size())].push_back(word);
         }
     }
 }
@@ -50,21 +52,36 @@ std::vector<std::string> SpellChecker::suggestions(const std::string& word, int 
     };
 
     std::vector<Candidate> candidates;
+    std::set<std::string> visited;
 
-    auto bucket = wordsByFirstLetter.find(normalized.front());
-    if (bucket == wordsByFirstLetter.end())
-        return {};
+    auto consider_word = [&](const std::string& dictionaryWord) {
+        if (!visited.insert(dictionaryWord).second)
+            return;
 
-    for (const std::string& dictionaryWord : bucket->second) {
         int lengthDifference
             = std::abs(static_cast<int>(dictionaryWord.size() - normalized.size()));
         if (lengthDifference > 2)
-            continue;
+            return;
 
         int distance = edit_distance_limited(normalized, dictionaryWord, 2);
-        if (distance <= 2) {
+        if (distance <= 2)
             candidates.push_back({ distance, lengthDifference, dictionaryWord });
-        }
+    };
+
+    auto firstLetterBucket = wordsByFirstLetter.find(normalized.front());
+    if (firstLetterBucket != wordsByFirstLetter.end()) {
+        for (const std::string& dictionaryWord : firstLetterBucket->second)
+            consider_word(dictionaryWord);
+    }
+
+    int normalizedLength = static_cast<int>(normalized.size());
+    for (int length = normalizedLength - 1; length <= normalizedLength + 1; ++length) {
+        auto lengthBucket = wordsByLength.find(length);
+        if (lengthBucket == wordsByLength.end())
+            continue;
+
+        for (const std::string& dictionaryWord : lengthBucket->second)
+            consider_word(dictionaryWord);
     }
 
     std::sort(

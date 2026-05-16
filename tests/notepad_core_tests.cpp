@@ -40,6 +40,10 @@ int main()
     assert(suggestions.size() <= 2);
     assert(suggestions.front() == "world");
 
+    std::vector<std::string> firstLetterTypoSuggestions = checker.suggestions("xorld");
+    assert(!firstLetterTypoSuggestions.empty());
+    assert(firstLetterTypoSuggestions.front() == "world");
+
     bool missingDictionaryThrows = false;
     try {
         checker.load_words(directory.path().toStdString() + "/missing.txt");

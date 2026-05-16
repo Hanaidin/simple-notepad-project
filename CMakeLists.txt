@@ -10,8 +10,7 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets PrintSupport)
 
-set(NOTEPAD_SOURCES
-    main.cpp
+set(NOTEPAD_APP_SOURCES
     autosave_manager.cpp
     main_window.cpp
     text_edit.cpp
@@ -23,7 +22,7 @@ set(NOTEPAD_SOURCES
     word_frequency_dialog.ui
 )
 
-qt_add_executable(notepad ${NOTEPAD_SOURCES})
+qt_add_executable(notepad main.cpp ${NOTEPAD_APP_SOURCES})
 
 target_link_libraries(notepad PRIVATE Qt6::Core Qt6::Widgets Qt6::PrintSupport)
 
@@ -39,3 +38,17 @@ target_include_directories(notepad_core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 target_link_libraries(notepad_core_tests PRIVATE Qt6::Core)
 
 add_test(NAME notepad_core_tests COMMAND notepad_core_tests)
+
+add_executable(notepad_gui_smoke_tests
+    tests/notepad_gui_smoke_tests.cpp
+    ${NOTEPAD_APP_SOURCES}
+)
+
+target_include_directories(notepad_gui_smoke_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(notepad_gui_smoke_tests PRIVATE Qt6::Core Qt6::Widgets Qt6::PrintSupport)
+
+add_test(NAME notepad_gui_smoke_tests COMMAND notepad_gui_smoke_tests)
+set_tests_properties(notepad_gui_smoke_tests PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)

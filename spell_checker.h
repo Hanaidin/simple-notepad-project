@@ -21,6 +21,7 @@ private:
 
     std::set<std::string> words;
     std::map<char, std::vector<std::string>> wordsByFirstLetter;
+    std::map<int, std::vector<std::string>> wordsByLength;
 };
 
 #endif
