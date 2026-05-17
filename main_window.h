@@ -10,10 +10,13 @@
 
 #include <QAction>
 #include <QCloseEvent>
+#include <QDockWidget>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
+#include <QPlainTextEdit>
 #include <QPointer>
+#include <QProcess>
 #include <QTimer>
 
 class MainWindow : public QMainWindow {
@@ -58,6 +61,13 @@ private slots:
     void reset_zoom();
     void toggle_dark_theme();
     void autosave_draft();
+    void run_python_code();
+    void stop_python_code();
+    void clear_python_console();
+    void handle_python_stdout();
+    void handle_python_stderr();
+    void handle_python_finished(int exitCode, QProcess::ExitStatus status);
+    void handle_python_error(QProcess::ProcessError error);
     void check_spelling();
     void show_editor_context_menu(const QPoint& position);
     void handle_text_changed();
@@ -69,6 +79,7 @@ private:
     void create_menus();
     void create_toolbar();
     void create_status_bar();
+    void create_python_console();
     void connect_editor_signals();
     void load_spell_checker();
     void setup_autosave();
@@ -112,6 +123,10 @@ private:
     QAction* underlineAction;
     QAction* darkThemeAction;
     QAction* restoreAutosaveAction;
+    QAction* runPythonAction;
+    QAction* stopPythonAction;
+    QAction* clearPythonConsoleAction;
+    QAction* showPythonConsoleAction;
     QAction* recentFileActions[5];
 
     QLabel* wordLineLabel;
@@ -119,6 +134,9 @@ private:
     QLabel* zoomLabel;
     QLabel* autosaveLabel;
     QTimer* autosaveTimer;
+    QDockWidget* pythonConsoleDock;
+    QPlainTextEdit* pythonConsole;
+    QProcess* pythonProcess;
 };
 
 #endif

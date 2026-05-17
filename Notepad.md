@@ -41,6 +41,7 @@ The spell checker is implemented in `spell_checker.h`, `spell_checker.cpp`, `spe
 - PDF export: `File > Export PDF...` saves the current document as a PDF.
 - Dark theme: `View > Dark Theme` switches the editor into a persistent dark mode.
 - Autosave and recovery: unsaved work is periodically saved to an application data draft. If a draft exists, `File > Restore Autosaved Draft` becomes available without blocking the main window.
+- Python runner: `Tools > Run Python` runs the selected Python code, or the whole document if nothing is selected, and shows output in a bottom `Python Console` panel. `Tools > Stop Python` stops a running script, and `Tools > Clear Python Console` clears the output.
 
 ## Demo Checklist
 
@@ -54,6 +55,7 @@ During the demo, the strongest flow is:
 6. Open `Tools > Word Frequency` to show the frequency dialog.
 7. Use `View > Dark Theme`, zoom controls, and the line/column status bar.
 8. Use `File > Export PDF...` or `File > Print...` to show output features.
+9. Type `print(40 + 2)`, choose `Tools > Run Python`, and show the `Python Console` output.
 
 ## Existing Features Preserved
 

@@ -7,6 +7,7 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QColorDialog>
+#include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -58,11 +59,18 @@ MainWindow::MainWindow(QWidget* parent)
     , underlineAction(nullptr)
     , darkThemeAction(nullptr)
     , restoreAutosaveAction(nullptr)
+    , runPythonAction(nullptr)
+    , stopPythonAction(nullptr)
+    , clearPythonConsoleAction(nullptr)
+    , showPythonConsoleAction(nullptr)
     , wordLineLabel(nullptr)
     , cursorLabel(nullptr)
     , zoomLabel(nullptr)
     , autosaveLabel(nullptr)
     , autosaveTimer(new QTimer(this))
+    , pythonConsoleDock(nullptr)
+    , pythonConsole(nullptr)
+    , pythonProcess(new QProcess(this))
 {
     setCentralWidget(editor);
     setWindowTitle("Notepad");
@@ -76,6 +84,7 @@ MainWindow::MainWindow(QWidget* parent)
     create_menus();
     create_toolbar();
     create_status_bar();
+    create_python_console();
     connect_editor_signals();
     setup_autosave();
 
@@ -391,6 +400,87 @@ void MainWindow::autosave_draft()
     autosaveLabel->setText("Autosave: saved");
 }
 
+void MainWindow::run_python_code()
+{
+    if (pythonProcess->state() != QProcess::NotRunning) {
+        pythonConsoleDock->show();
+        pythonConsole->appendPlainText("Python is already running.");
+        return;
+    }
+
+    QTextCursor cursor = editor->textCursor();
+    QString code = cursor.hasSelection() ? cursor.selectedText() : editor->toPlainText();
+    code.replace(QChar::ParagraphSeparator, "\n");
+
+    if (code.trimmed().isEmpty()) {
+        pythonConsoleDock->show();
+        pythonConsole->appendPlainText("Nothing to run.");
+        return;
+    }
+
+    pythonConsoleDock->show();
+    pythonConsole->appendPlainText(
+        QString("\n>>> Run Python %1").arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
+    pythonConsole->appendPlainText(code);
+    pythonConsole->appendPlainText("--- output ---");
+
+    runPythonAction->setEnabled(false);
+    stopPythonAction->setEnabled(true);
+
+    pythonProcess->start("python3", { "-u", "-" });
+    if (!pythonProcess->waitForStarted(3000)) {
+        pythonConsole->appendPlainText("Could not start python3.");
+        runPythonAction->setEnabled(true);
+        stopPythonAction->setEnabled(false);
+        return;
+    }
+
+    pythonProcess->write(code.toUtf8());
+    pythonProcess->closeWriteChannel();
+}
+
+void MainWindow::stop_python_code()
+{
+    if (pythonProcess->state() == QProcess::NotRunning)
+        return;
+
+    pythonConsoleDock->show();
+    pythonConsole->appendPlainText("Stopping Python process...");
+    pythonProcess->kill();
+}
+
+void MainWindow::clear_python_console() { pythonConsole->clear(); }
+
+void MainWindow::handle_python_stdout()
+{
+    pythonConsole->appendPlainText(
+        QString::fromUtf8(pythonProcess->readAllStandardOutput()).trimmed());
+}
+
+void MainWindow::handle_python_stderr()
+{
+    pythonConsole->appendPlainText(
+        QString::fromUtf8(pythonProcess->readAllStandardError()).trimmed());
+}
+
+void MainWindow::handle_python_finished(int exitCode, QProcess::ExitStatus status)
+{
+    QString statusText = status == QProcess::NormalExit ? "finished" : "stopped";
+    pythonConsole->appendPlainText(
+        QString("--- Python %1, exit code %2 ---").arg(statusText).arg(exitCode));
+    runPythonAction->setEnabled(true);
+    stopPythonAction->setEnabled(false);
+}
+
+void MainWindow::handle_python_error(QProcess::ProcessError error)
+{
+    Q_UNUSED(error);
+    pythonConsoleDock->show();
+    pythonConsole->appendPlainText("Python runner error. Make sure python3 is installed.");
+    runPythonAction->setEnabled(true);
+    stopPythonAction->setEnabled(false);
+}
+
 void MainWindow::check_spelling()
 {
     spellHighlighter->rehighlight();
@@ -496,6 +586,20 @@ void MainWindow::create_actions()
     restoreAutosaveAction = new QAction("Restore Autosaved Draft", this);
     restoreAutosaveAction->setEnabled(false);
     connect(restoreAutosaveAction, &QAction::triggered, this, &MainWindow::restore_autosave_draft);
+
+    runPythonAction = new QAction("Run Python", this);
+    runPythonAction->setShortcut(QKeySequence("Ctrl+Shift+R"));
+    connect(runPythonAction, &QAction::triggered, this, &MainWindow::run_python_code);
+
+    stopPythonAction = new QAction("Stop Python", this);
+    stopPythonAction->setEnabled(false);
+    connect(stopPythonAction, &QAction::triggered, this, &MainWindow::stop_python_code);
+
+    clearPythonConsoleAction = new QAction("Clear Python Console", this);
+    connect(clearPythonConsoleAction, &QAction::triggered, this, &MainWindow::clear_python_console);
+
+    showPythonConsoleAction = new QAction("Show Python Console", this);
+    showPythonConsoleAction->setCheckable(true);
 }
 
 void MainWindow::create_menus()
@@ -545,6 +649,12 @@ void MainWindow::create_menus()
     toolsMenu = menuBar()->addMenu("&Tools");
     toolsMenu->addAction("Check Spelling...", this, &MainWindow::check_spelling);
     toolsMenu->addAction("Word Frequency", this, &MainWindow::show_word_frequency);
+    toolsMenu->addSeparator();
+    toolsMenu->addAction(runPythonAction);
+    toolsMenu->addAction(stopPythonAction);
+    toolsMenu->addAction(clearPythonConsoleAction);
+    toolsMenu->addAction(showPythonConsoleAction);
+    toolsMenu->addSeparator();
     QMenu* syntaxMenu = toolsMenu->addMenu("Syntax Highlighting");
     QActionGroup* syntaxGroup = new QActionGroup(this);
     QAction* plainTextAction = syntaxMenu->addAction("Plain Text");
@@ -590,6 +700,7 @@ void MainWindow::create_toolbar()
     toolbar->addAction("Color", this, &MainWindow::choose_text_color);
     toolbar->addSeparator();
     toolbar->addAction("Check Spelling", this, &MainWindow::check_spelling);
+    toolbar->addAction(runPythonAction);
 }
 
 void MainWindow::create_status_bar()
@@ -603,6 +714,33 @@ void MainWindow::create_status_bar()
     statusBar()->addPermanentWidget(wordLineLabel);
     statusBar()->addPermanentWidget(cursorLabel);
     statusBar()->addPermanentWidget(zoomLabel);
+}
+
+void MainWindow::create_python_console()
+{
+    pythonConsole = new QPlainTextEdit(this);
+    pythonConsole->setObjectName("pythonConsole");
+    pythonConsole->setReadOnly(true);
+    pythonConsole->setPlaceholderText("Python output will appear here.");
+
+    pythonConsoleDock = new QDockWidget("Python Console", this);
+    pythonConsoleDock->setObjectName("pythonConsoleDock");
+    pythonConsoleDock->setWidget(pythonConsole);
+    pythonConsoleDock->setAllowedAreas(Qt::BottomDockWidgetArea);
+    addDockWidget(Qt::BottomDockWidgetArea, pythonConsoleDock);
+    pythonConsoleDock->hide();
+
+    connect(pythonConsoleDock, &QDockWidget::visibilityChanged, this,
+        [this](bool visible) { showPythonConsoleAction->setChecked(visible); });
+    connect(
+        showPythonConsoleAction, &QAction::triggered, pythonConsoleDock, &QDockWidget::setVisible);
+    connect(
+        pythonProcess, &QProcess::readyReadStandardOutput, this, &MainWindow::handle_python_stdout);
+    connect(
+        pythonProcess, &QProcess::readyReadStandardError, this, &MainWindow::handle_python_stderr);
+    connect(pythonProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+        &MainWindow::handle_python_finished);
+    connect(pythonProcess, &QProcess::errorOccurred, this, &MainWindow::handle_python_error);
 }
 
 void MainWindow::connect_editor_signals()
@@ -806,6 +944,19 @@ void MainWindow::apply_theme(bool darkMode)
                 selection-color: #ffffff;
                 border: 0;
             }
+            QPlainTextEdit {
+                background: #0f172a;
+                color: #e2e8f0;
+                selection-background-color: #2563eb;
+                border: 0;
+                padding: 10px;
+                font-family: Menlo, Consolas, monospace;
+            }
+            QDockWidget {
+                background: #ffffff;
+                color: #24292f;
+                titlebar-close-icon: none;
+            }
             QStatusBar {
                 background: #ffffff;
                 color: #57606a;
@@ -895,6 +1046,19 @@ void MainWindow::apply_theme(bool darkMode)
             selection-background-color: #3b82f6;
             selection-color: #ffffff;
             border: 0;
+        }
+        QPlainTextEdit {
+            background: #0b1020;
+            color: #dbeafe;
+            selection-background-color: #3b82f6;
+            border: 0;
+            padding: 10px;
+            font-family: Menlo, Consolas, monospace;
+        }
+        QDockWidget {
+            background: #25282c;
+            color: #f1f3f4;
+            titlebar-close-icon: none;
         }
         QStatusBar {
             background: #25282c;

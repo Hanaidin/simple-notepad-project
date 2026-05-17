@@ -2,8 +2,10 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QElapsedTimer>
 #include <QLabel>
 #include <QMenu>
+#include <QPlainTextEdit>
 #include <QTextEdit>
 
 #include <cassert>
@@ -54,6 +56,20 @@ bool has_menu(MainWindow& window, const QString& title)
     return false;
 }
 
+bool wait_for_console_text(QPlainTextEdit* console, const QString& text)
+{
+    QElapsedTimer timer;
+    timer.start();
+
+    while (timer.elapsed() < 5000) {
+        QApplication::processEvents();
+        if (console->toPlainText().contains(text))
+            return true;
+    }
+
+    return false;
+}
+
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
@@ -72,6 +88,10 @@ int main(int argc, char* argv[])
     assert(has_action(window, "Export PDF..."));
     assert(has_action(window, "Dark Theme"));
     assert(has_action(window, "Restore Autosaved Draft"));
+    assert(has_action(window, "Run Python"));
+    assert(has_action(window, "Stop Python"));
+    assert(has_action(window, "Clear Python Console"));
+    assert(has_action(window, "Show Python Console"));
     assert(has_action(window, "C++"));
     assert(has_action(window, "Python"));
 
@@ -97,6 +117,49 @@ int main(int argc, char* argv[])
 
     resetZoom->trigger();
     assert(has_label_text(window, "Zoom: 100%"));
+
+    QAction* uppercase = find_action(window, "UPPERCASE");
+    QAction* lowercase = find_action(window, "lowercase");
+    assert(uppercase != nullptr);
+    assert(lowercase != nullptr);
+
+    editor->setPlainText("hello world");
+    uppercase->trigger();
+    assert(editor->toPlainText() == "HELLO WORLD");
+    lowercase->trigger();
+    assert(editor->toPlainText() == "hello world");
+
+    QAction* bold = find_action(window, "Bold");
+    QAction* italic = find_action(window, "Italic");
+    QAction* underline = find_action(window, "Underline");
+    assert(bold != nullptr);
+    assert(italic != nullptr);
+    assert(underline != nullptr);
+    bold->trigger();
+    italic->trigger();
+    underline->trigger();
+    assert(bold->isChecked());
+    assert(italic->isChecked());
+    assert(underline->isChecked());
+
+    QAction* darkTheme = find_action(window, "Dark Theme");
+    assert(darkTheme != nullptr);
+    darkTheme->trigger();
+    assert(darkTheme->isChecked());
+    darkTheme->trigger();
+    assert(!darkTheme->isChecked());
+
+    QPlainTextEdit* console = window.findChild<QPlainTextEdit*>("pythonConsole");
+    assert(console != nullptr);
+    QAction* runPython = find_action(window, "Run Python");
+    QAction* clearPython = find_action(window, "Clear Python Console");
+    assert(runPython != nullptr);
+    assert(clearPython != nullptr);
+    editor->setPlainText("print(40 + 2)");
+    runPython->trigger();
+    assert(wait_for_console_text(console, "42"));
+    clearPython->trigger();
+    assert(console->toPlainText().isEmpty());
 
     return 0;
 }
