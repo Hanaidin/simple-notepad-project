@@ -327,7 +327,19 @@ void MainWindow::choose_font()
 
     QTextCharFormat format;
     format.setFont(font);
-    merge_format_on_selection(format);
+
+    QTextCursor cursor = editor->textCursor();
+    if (cursor.hasSelection()) {
+        cursor.mergeCharFormat(format);
+        editor->mergeCurrentCharFormat(format);
+        return;
+    }
+
+    QTextCursor originalCursor = cursor;
+    cursor.select(QTextCursor::Document);
+    cursor.mergeCharFormat(format);
+    editor->setTextCursor(originalCursor);
+    editor->mergeCurrentCharFormat(format);
 }
 
 void MainWindow::choose_text_color()
@@ -796,6 +808,8 @@ void MainWindow::load_file(const QString& path)
 
     QTextStream stream(&file);
     QString content = stream.readAll();
+    if (stream.status() != QTextStream::Ok || file.error() != QFile::NoError)
+        throw file_read_exception(path.toStdString());
 
     if (Qt::mightBeRichText(content))
         editor->setHtml(content);
@@ -823,6 +837,10 @@ void MainWindow::write_file(const QString& path)
         stream << editor->toHtml();
     else
         stream << editor->toPlainText();
+
+    stream.flush();
+    if (stream.status() != QTextStream::Ok || !file.flush() || file.error() != QFile::NoError)
+        throw file_write_exception(path.toStdString());
 
     editor->document()->setModified(false);
     clear_autosave();
