@@ -805,7 +805,6 @@ void MainWindow::apply_theme(bool darkMode)
                 selection-background-color: #2563eb;
                 selection-color: #ffffff;
                 border: 0;
-                font-size: 15px;
             }
             QStatusBar {
                 background: #ffffff;
@@ -896,7 +895,6 @@ void MainWindow::apply_theme(bool darkMode)
             selection-background-color: #3b82f6;
             selection-color: #ffffff;
             border: 0;
-            font-size: 15px;
         }
         QStatusBar {
             background: #25282c;
